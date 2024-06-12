@@ -80,10 +80,26 @@ uint8_t appSKey[] = {RADIOLIB_LORAWAN_APPSKEY};
 // create the LoRaWAN node
 LoRaWANNode node(&radio, &Region, subBand);
 
-// ------------------ Set up BME280 Sensor -------------------
+// ------------------ Declare BME280 Sensor -------------------
 #include <Adafruit_BME280.h>
 #define SEALEVELPRESSURE_HPA (1013.25)
 Adafruit_BME280 bme; // I2C
+
+// -------------------- End of set up ------------------------
+
+// ------------------ Declare QMI8658 Sensor -------------------
+#include "SensorQMI8658.hpp"
+#include <MadgwickAHRS.h>
+
+unsigned long delayTime;
+//SH1106Wire display(0x3c, I2C_SDA, I2C_SCL);
+SensorQMI8658 qmi;
+
+IMUdata acc;
+IMUdata gyr;
+
+Madgwick IMUfilter;
+unsigned long microsPerReading, microsPrevious;
 
 // -------------------- End of set up ------------------------
 
@@ -210,6 +226,108 @@ void setup()
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
   // ----------------- End of initialise --------------------------
+
+  // ----------------- Initialise QMI8658 sensor -------------------
+  pinMode(SPI_CS, OUTPUT); // sdcard pin set high
+  digitalWrite(SPI_CS, HIGH);
+
+  if (!qmi.begin(IMU_CS, -1, -1, -1, SDCardSPI))
+  {
+    Serial.println("Failed to find QMI8658 - check your wiring!");
+    while (1)
+    {
+      delay(1000);
+    }
+  }
+
+  // Get chip id
+  Serial.print("Device ID:");
+  Serial.println(qmi.getChipID(), HEX);
+
+  qmi.configAccelerometer(
+      /*
+       * ACC_RANGE_2G
+       * ACC_RANGE_4G
+       * ACC_RANGE_8G
+       * ACC_RANGE_16G
+       * */
+      SensorQMI8658::ACC_RANGE_2G,
+      /*
+       * ACC_ODR_1000H
+       * ACC_ODR_500Hz
+       * ACC_ODR_250Hz
+       * ACC_ODR_125Hz
+       * ACC_ODR_62_5Hz
+       * ACC_ODR_31_25Hz
+       * ACC_ODR_LOWPOWER_128Hz
+       * ACC_ODR_LOWPOWER_21Hz
+       * ACC_ODR_LOWPOWER_11Hz
+       * ACC_ODR_LOWPOWER_3H
+       * */
+      SensorQMI8658::ACC_ODR_1000Hz,
+      /*
+       *  LPF_MODE_0     //2.66% of ODR
+       *  LPF_MODE_1     //3.63% of ODR
+       *  LPF_MODE_2     //5.39% of ODR
+       *  LPF_MODE_3     //13.37% of ODR
+       * */
+      SensorQMI8658::LPF_MODE_0,
+      // selfTest enable
+      true);
+
+  qmi.configGyroscope(
+      /*
+       * GYR_RANGE_16DPS
+       * GYR_RANGE_32DPS
+       * GYR_RANGE_64DPS
+       * GYR_RANGE_128DPS
+       * GYR_RANGE_256DPS
+       * GYR_RANGE_512DPS
+       * GYR_RANGE_1024DPS
+       * */
+      SensorQMI8658::GYR_RANGE_256DPS,
+      /*
+       * GYR_ODR_7174_4Hz
+       * GYR_ODR_3587_2Hz
+       * GYR_ODR_1793_6Hz
+       * GYR_ODR_896_8Hz
+       * GYR_ODR_448_4Hz
+       * GYR_ODR_224_2Hz
+       * GYR_ODR_112_1Hz
+       * GYR_ODR_56_05Hz
+       * GYR_ODR_28_025H
+       * */
+      SensorQMI8658::GYR_ODR_896_8Hz,
+      /*
+       *  LPF_MODE_0     //2.66% of ODR
+       *  LPF_MODE_1     //3.63% of ODR
+       *  LPF_MODE_2     //5.39% of ODR
+       *  LPF_MODE_3     //13.37% of ODR
+       * */
+      SensorQMI8658::LPF_MODE_3,
+      // selfTest enable
+      true);
+
+  // In 6DOF mode (accelerometer and gyroscope are both enabled),
+  // the output data rate is derived from the nature frequency of gyroscope
+  qmi.enableGyroscope();
+  qmi.enableAccelerometer();
+
+  // Print register configuration information
+  Serial.print("dumping register config");
+  qmi.dumpCtrlRegister();
+  qmi.enableSyncSampleMode();
+
+  // start  filter
+  IMUfilter.begin(25);
+
+  // initialize variables to pace updates to correct rate
+  microsPerReading = 1000000 / 25;
+  microsPrevious = micros();
+
+  Serial.println("Read data now...");
+
+  // ----------------- End of initialise --------------------------
 }
 
 void loop()
@@ -230,14 +348,57 @@ void loop()
 
   // ------------------- End of BME 280 sensor ----------------------
 
+  // ------------------- Get QMI8658 sensor data ---------------------
+  // check if it's time to read data and update the filter
+  if (micros() - microsPrevious >= microsPerReading)
+  {
+
+    // read raw data from IMU
+
+    if (qmi.getDataReady())
+    {
+
+      qmi.getAccelerometer(acc.x, acc.y, acc.z);
+      qmi.getGyroscope(gyr.x, gyr.y, gyr.z);
+
+      Serial.println(gyr.x);
+      Serial.println(gyr.y);
+      Serial.println(gyr.z);
+
+      // update the filter, which computes orientation
+      IMUfilter.updateIMU(gyr.x, gyr.y, gyr.z, acc.x, acc.y, acc.z);
+    }
+  }
+  // print the heading, pitch and roll
+  Serial.print("Roll:");
+  Serial.println(IMUfilter.getRoll());
+  Serial.print("qmiStatus: ");
+  Serial.println(qmi.readSensorStatus());
+
+  int16_t vRoll = (IMUfilter.getRoll() * 10000);
+  int16_t vPitch = (IMUfilter.getPitch() * 10000);
+  int16_t vHeading = (IMUfilter.getYaw() * 10000);
+  //}
+  microsPrevious = microsPrevious + microsPerReading;
+
+  // ------------------- End of BME 280 sensor ----------------------
+
   // Build payload byte array
-  uint8_t uplinkPayload[6];
+  uint8_t uplinkPayload[12];
+  // Add environmental data
   uplinkPayload[0] = highByte(vTemp); // See notes for high/lowByte functions
   uplinkPayload[1] = lowByte(vTemp);
   uplinkPayload[2] = highByte(vPress); // See notes for high/lowByte functions
   uplinkPayload[3] = lowByte(vPress);
   uplinkPayload[4] = highByte(vHumid); // See notes for high/lowByte functions
   uplinkPayload[5] = lowByte(vHumid);
+  // Add environmental data
+  uplinkPayload[6] = highByte(vPitch); // See notes for high/lowByte functions
+  uplinkPayload[7] = lowByte(vPitch);
+  uplinkPayload[8] = highByte(vRoll); // See notes for high/lowByte functions
+  uplinkPayload[9] = lowByte(vRoll);
+  uplinkPayload[10] = highByte(vHeading); // See notes for high/lowByte functions
+  uplinkPayload[11] = lowByte(vHeading);
 
   // Perform an uplink
   int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
