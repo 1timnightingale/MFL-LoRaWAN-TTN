@@ -55,7 +55,7 @@ LR1121 radio = new Module(RADIO_CS_PIN, RADIO_DIO9_PIN, RADIO_RST_PIN, RADIO_BUS
 #endif
 
 // how often to send an uplink - consider legal & FUP constraints - see notes
-const uint32_t uplinkIntervalSeconds = 5UL * 60UL; // minutes x seconds
+const uint32_t uplinkIntervalSeconds = 1UL * 60UL; // minutes x seconds
 
 // for the curious, the #ifndef blocks allow for automated testing &/or you can
 // put your EUI & keys in to your platformio.ini - see wiki for more tips
@@ -85,14 +85,14 @@ LoRaWANNode node(&radio, &Region, subBand);
 #define SEALEVELPRESSURE_HPA (1013.25)
 Adafruit_BME280 bme; // I2C
 
-// -------------------- End of set up ------------------------
+// -------------------- End of BME280 set up ------------------------
 
 // ------------------ Declare QMI8658 Sensor -------------------
 #include "SensorQMI8658.hpp"
 #include <MadgwickAHRS.h>
 
 unsigned long delayTime;
-//SH1106Wire display(0x3c, I2C_SDA, I2C_SCL);
+// SH1106Wire display(0x3c, I2C_SDA, I2C_SCL);
 SensorQMI8658 qmi;
 
 IMUdata acc;
@@ -101,7 +101,12 @@ IMUdata gyr;
 Madgwick IMUfilter;
 unsigned long microsPerReading, microsPrevious;
 
-// -------------------- End of set up ------------------------
+// -------------------- End of QMI8658 set up ------------------------
+
+// ------------------ Declare PMU Sensor -------------------
+// -------------------- End of PMU set up ------------------------
+// ------------------ Declare GPS Sensor -------------------
+// -------------------- End of GPS set up ------------------------
 
 // helper function to display any issues
 void debug(bool isFail, const __FlashStringHelper *message, int state, bool Freeze)
@@ -225,7 +230,7 @@ void setup()
   {
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
-  // ----------------- End of initialise --------------------------
+  // ----------------- End of BME280 initialise --------------------------
 
   // ----------------- Initialise QMI8658 sensor -------------------
   pinMode(SPI_CS, OUTPUT); // sdcard pin set high
@@ -327,7 +332,13 @@ void setup()
 
   Serial.println("Read data now...");
 
-  // ----------------- End of initialise --------------------------
+  // ----------------- End of QMI8658 initialise --------------------------
+
+  // ----------------- Initialise PMU sensor -------------------
+  // ----------------- End of PMU initialise --------------------------
+
+  // ----------------- Initialise GPS sensor -------------------
+  // ----------------- End of GPS initialise --------------------------
 }
 
 void loop()
@@ -342,9 +353,17 @@ void loop()
   // uint16_t value2 = 2000;
 
   // ------------------- Get BME280 sensor data ---------------------
-  int16_t vTemp = (bme.readTemperature() * 10000);
-  uint16_t vPress = (bme.readPressure() * 1000);
-  uint16_t vHumid = (bme.readHumidity() * 10000);
+  int32_t vTemp = (bme.readTemperature() * 10000);
+  uint32_t vPress = (bme.readPressure() * 100); // already mult by 100 so still div 100 to decode.
+  uint32_t vHumid = (bme.readHumidity() * 10000);
+
+  // Print values to serial
+  Serial.print("Temp:");
+  Serial.println(vTemp);
+  Serial.print("Press:");
+  Serial.println(vPress);
+  Serial.print("Humid:");
+  Serial.println(vHumid);
 
   // ------------------- End of BME 280 sensor ----------------------
 
@@ -369,36 +388,63 @@ void loop()
       IMUfilter.updateIMU(gyr.x, gyr.y, gyr.z, acc.x, acc.y, acc.z);
     }
   }
-  // print the heading, pitch and roll
-  Serial.print("Roll:");
-  Serial.println(IMUfilter.getRoll());
-  Serial.print("qmiStatus: ");
-  Serial.println(qmi.readSensorStatus());
 
-  int16_t vRoll = (IMUfilter.getRoll() * 10000);
-  int16_t vPitch = (IMUfilter.getPitch() * 10000);
-  int16_t vHeading = (IMUfilter.getYaw() * 10000);
+  int32_t vRoll = (IMUfilter.getRoll() * 10000);
+  int32_t vPitch = (IMUfilter.getPitch() * 10000);
+  int32_t vHeading = (IMUfilter.getYaw() * 10000);
+
+  // Print values to serial
+  Serial.print("Roll:");
+  Serial.println(vRoll);
+  Serial.print("Pitch:");
+  Serial.println(vPitch);
+  Serial.print("Heading:");
+  Serial.println(vHeading);
+
   //}
   microsPrevious = microsPrevious + microsPerReading;
 
   // ------------------- End of BME 280 sensor ----------------------
 
+  // ------------------- Get PMU sensor data ---------------------
+  // ------------------- End of PMU sensor ----------------------
+
+  // ------------------- Get GPS sensor data ---------------------
+  // ------------------- End of GPS sensor ----------------------
+
   // Build payload byte array
-  uint8_t uplinkPayload[12];
+  uint8_t uplinkPayload[24];
   // Add environmental data
-  uplinkPayload[0] = highByte(vTemp); // See notes for high/lowByte functions
-  uplinkPayload[1] = lowByte(vTemp);
-  uplinkPayload[2] = highByte(vPress); // See notes for high/lowByte functions
-  uplinkPayload[3] = lowByte(vPress);
-  uplinkPayload[4] = highByte(vHumid); // See notes for high/lowByte functions
-  uplinkPayload[5] = lowByte(vHumid);
-  // Add environmental data
-  uplinkPayload[6] = highByte(vPitch); // See notes for high/lowByte functions
-  uplinkPayload[7] = lowByte(vPitch);
-  uplinkPayload[8] = highByte(vRoll); // See notes for high/lowByte functions
-  uplinkPayload[9] = lowByte(vRoll);
-  uplinkPayload[10] = highByte(vHeading); // See notes for high/lowByte functions
-  uplinkPayload[11] = lowByte(vHeading);
+  uplinkPayload[0] = (byte)((vTemp & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[1] = (byte)((vTemp & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[2] = (byte)((vTemp & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[3] = (byte)((vTemp & 0x000000FF));       // See notes for high/lowByte functions
+
+  uplinkPayload[4] = (byte)((vPress & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[5] = (byte)((vPress & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[6] = (byte)((vPress & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[7] = (byte)((vPress & 0x000000FF));       // See notes for high/lowByte functions
+
+  uplinkPayload[8] = (byte)((vHumid & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[9] = (byte)((vHumid & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[10] = (byte)((vHumid & 0x0000FF00) >> 8); // See notes for high/lowByte functions
+  uplinkPayload[11] = (byte)((vHumid & 0x000000FF));      // See notes for high/lowByte functions
+
+  // Add orientation data
+  uplinkPayload[12] = (byte)((vRoll & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[13] = (byte)((vRoll & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[14] = (byte)((vRoll & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[15] = (byte)((vRoll & 0x000000FF));       // See notes for high/lowByte functions
+
+  uplinkPayload[16] = (byte)((vPitch & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[17] = (byte)((vPitch & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[18] = (byte)((vPitch & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[19] = (byte)((vPitch & 0x000000FF));       // See notes for high/lowByte functions
+
+  uplinkPayload[20] = (byte)((vHeading & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[21] = (byte)((vHeading & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[22] = (byte)((vHeading & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[23] = (byte)((vHeading & 0x000000FF));       // See notes for high/lowByte functions
 
   // Perform an uplink
   int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
