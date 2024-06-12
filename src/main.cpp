@@ -380,10 +380,6 @@ void loop()
       qmi.getAccelerometer(acc.x, acc.y, acc.z);
       qmi.getGyroscope(gyr.x, gyr.y, gyr.z);
 
-      Serial.println(gyr.x);
-      Serial.println(gyr.y);
-      Serial.println(gyr.z);
-
       // update the filter, which computes orientation
       IMUfilter.updateIMU(gyr.x, gyr.y, gyr.z, acc.x, acc.y, acc.z);
     }

@@ -408,7 +408,7 @@ void getChipInfo()
 
     printWakeupReason();
 
-#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(T_BEAM_S3_SUPREME) // added the last one to force PSRAM setting
 
     if (psramFound())
     {
@@ -475,9 +475,11 @@ void setupBoards()
 {
     Serial.begin(115200);
 
+    delay(5000); // Give time to switch to the serial monitor
+
     Serial.println("setupBoards");
 
-    Serial.begin(115200);
+    //    Serial.begin(115200);
 
     getChipInfo();
 
