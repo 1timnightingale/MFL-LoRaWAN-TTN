@@ -104,8 +104,18 @@ unsigned long microsPerReading, microsPrevious;
 // -------------------- End of QMI8658 set up ------------------------
 
 // ------------------ Declare PMU Sensor -------------------
+// ---------- Already done in LoRaBoards.cpp
 // -------------------- End of PMU set up ------------------------
 // ------------------ Declare GPS Sensor -------------------
+#include "SparkFun_Ublox_Arduino_Library.h"
+
+SFE_UBLOX_GPS myGPS;
+
+#include <MicroNMEA.h> //https://github.com/stevemarple/MicroNMEA
+
+char nmeaBuffer[100];
+MicroNMEA nmea(nmeaBuffer, sizeof(nmeaBuffer));
+
 // -------------------- End of GPS set up ------------------------
 
 // helper function to display any issues
@@ -333,11 +343,20 @@ void setup()
   Serial.println("Read data now...");
 
   // ----------------- End of QMI8658 initialise --------------------------
-
+  // ------------------- Already done in LoRaBoards.cpp
   // ----------------- Initialise PMU sensor -------------------
+
   // ----------------- End of PMU initialise --------------------------
 
   // ----------------- Initialise GPS sensor -------------------
+
+  if (myGPS.begin(SerialGPS) == false)
+  {
+    Serial.println(F("Ublox GPS not detected . Please check wiring. Freezing."));
+    while (1)
+      ;
+  }
+
   // ----------------- End of GPS initialise --------------------------
 }
 
@@ -403,13 +422,58 @@ void loop()
   // ------------------- End of BME 280 sensor ----------------------
 
   // ------------------- Get PMU sensor data ---------------------
+
+  uint8_t vPmu_charging = (PMU->isCharging() ? 1 : 0);
+  uint8_t vPmu_discharge = (PMU->isDischarge() ? 1 : 0);
+  uint8_t vPmu_vbusIn = (PMU->isVbusIn() ? 1 : 0);
+  uint16_t vPmu_battV = (PMU->getBattVoltage() * 1000);
+  uint16_t vPmu_vbusV = (PMU->getVbusVoltage() * 1000);
+  uint16_t vPmu_SysV = (PMU->getSystemVoltage() * 1000);
+  uint16_t vPmu_battperc = (PMU->getBatteryPercent() * 1000);
+
+  // Print values to serial
+  Serial.print("Charging:");
+  Serial.println(vPmu_charging);
+  Serial.print("Discharging:");
+  Serial.println(vPmu_discharge);
+  Serial.print("vBus In:");
+  Serial.println(vPmu_vbusIn);
+  Serial.print("Battery V:");
+  Serial.println(vPmu_battV);
+  Serial.print("vBus V:");
+  Serial.println(vPmu_vbusV);
+  Serial.print("Sys V:");
+  Serial.println(vPmu_SysV);
+  Serial.print("Batt Perc:");
+  Serial.println(vPmu_battperc);
+
   // ------------------- End of PMU sensor ----------------------
 
   // ------------------- Get GPS sensor data ---------------------
+  // myGPS.checkUblox(); // See if new data is available. Process bytes as they come in.
+  // set the readings to zero
+  uint32_t vLatitude = 0;
+  uint32_t vLongitude = 0;
+  uint8_t vnumSatellites = 0;
+
+  if (nmea.isValid() == true)
+  {
+    uint32_t vLatitude = (nmea.getLatitude()); // already an interger mult by 1000000, still divide in decode
+    uint32_t vLongitude = (nmea.getLongitude());
+    uint8_t vnumSatellites = (nmea.getNumSatellites());
+  }
+  // Print values to serial
+  Serial.print("Latitude:");
+  Serial.println(vLatitude);
+  Serial.print("Longitude:");
+  Serial.println(vLongitude);
+  Serial.print("No Satellites:");
+  Serial.println(vnumSatellites);
+
   // ------------------- End of GPS sensor ----------------------
 
   // Build payload byte array
-  uint8_t uplinkPayload[24];
+  uint8_t uplinkPayload[44];
   // Add environmental data
   uplinkPayload[0] = (byte)((vTemp & 0xFF000000) >> 24); // See notes for high/lowByte functions
   uplinkPayload[1] = (byte)((vTemp & 0x00FF0000) >> 16); // See notes for high/lowByte functions
@@ -441,6 +505,36 @@ void loop()
   uplinkPayload[21] = (byte)((vHeading & 0x00FF0000) >> 16); // See notes for high/lowByte functions
   uplinkPayload[22] = (byte)((vHeading & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
   uplinkPayload[23] = (byte)((vHeading & 0x000000FF));       // See notes for high/lowByte functions
+
+  // Add PMU data
+  uplinkPayload[24] = vPmu_charging;
+  uplinkPayload[25] = vPmu_discharge;
+  uplinkPayload[26] = vPmu_vbusIn;
+
+  uplinkPayload[27] = (byte)((vPmu_battV & 0x0000FF00) >> 8); // See notes for high/lowByte functions
+  uplinkPayload[28] = (byte)((vPmu_battV & 0x000000FF));      // See notes for high/lowByte functions
+
+  uplinkPayload[29] = (byte)((vPmu_vbusV & 0x0000FF00) >> 8); // See notes for high/lowByte functions
+  uplinkPayload[30] = (byte)((vPmu_vbusV & 0x000000FF));      // See notes for high/lowByte functions
+
+  uplinkPayload[31] = (byte)((vPmu_SysV & 0x0000FF00) >> 8); // See notes for high/lowByte functions
+  uplinkPayload[32] = (byte)((vPmu_SysV & 0x000000FF));      // See notes for high/lowByte functions
+
+  uplinkPayload[33] = (byte)((vPmu_battperc & 0x0000FF00) >> 8); // See notes for high/lowByte functions
+  uplinkPayload[34] = (byte)((vPmu_battperc & 0x000000FF));      // See notes for high/lowByte functions
+
+  // Add positioning data
+  uplinkPayload[35] = (byte)((vLatitude & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[36] = (byte)((vLatitude & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[37] = (byte)((vLatitude & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[38] = (byte)((vLatitude & 0x000000FF));       // See notes for high/lowByte functions
+
+  uplinkPayload[39] = (byte)((vLongitude & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[40] = (byte)((vLongitude & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[41] = (byte)((vLongitude & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[42] = (byte)((vLongitude & 0x000000FF));       // See notes for high/lowByte functions
+
+  uplinkPayload[43] = vnumSatellites;
 
   // Perform an uplink
   int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
