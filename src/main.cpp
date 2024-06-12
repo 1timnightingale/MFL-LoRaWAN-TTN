@@ -80,6 +80,13 @@ uint8_t appSKey[] = {RADIOLIB_LORAWAN_APPSKEY};
 // create the LoRaWAN node
 LoRaWANNode node(&radio, &Region, subBand);
 
+// ------------------ Set up BME280 Sensor -------------------
+#include <Adafruit_BME280.h>
+#define SEALEVELPRESSURE_HPA (1013.25)
+Adafruit_BME280 bme; // I2C
+
+// -------------------- End of set up ------------------------
+
 // helper function to display any issues
 void debug(bool isFail, const __FlashStringHelper *message, int state, bool Freeze)
 {
@@ -196,6 +203,13 @@ void setup()
   }
 
   Serial.println(F("Joined!\n"));
+
+  // ----------------- Initialise BME280 sensor -------------------
+  if (!bme.begin(0x77, &Wire))
+  {
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+  }
+  // ----------------- End of initialise --------------------------
 }
 
 void loop()
@@ -204,16 +218,26 @@ void loop()
 
   // This is the place to gather the sensor inputs
   // Instead of reading any real sensor, we just generate some random numbers as example
-  uint8_t value1 = radio.random(100);
-  uint16_t value2 = radio.random(2000);
+  // uint8_t value1 = radio.random(100);
+  // uint16_t value2 = radio.random(2000);
   // uint8_t value1 = 100;
   // uint16_t value2 = 2000;
 
+  // ------------------- Get BME280 sensor data ---------------------
+  int16_t vTemp = (bme.readTemperature() * 10000);
+  uint16_t vPress = (bme.readPressure() * 1000);
+  uint16_t vHumid = (bme.readHumidity() * 10000);
+
+  // ------------------- End of BME 280 sensor ----------------------
+
   // Build payload byte array
-  uint8_t uplinkPayload[3];
-  uplinkPayload[0] = value1;
-  uplinkPayload[1] = highByte(value2); // See notes for high/lowByte functions
-  uplinkPayload[2] = lowByte(value2);
+  uint8_t uplinkPayload[6];
+  uplinkPayload[0] = highByte(vTemp); // See notes for high/lowByte functions
+  uplinkPayload[1] = lowByte(vTemp);
+  uplinkPayload[2] = highByte(vPress); // See notes for high/lowByte functions
+  uplinkPayload[3] = lowByte(vPress);
+  uplinkPayload[4] = highByte(vHumid); // See notes for high/lowByte functions
+  uplinkPayload[5] = lowByte(vHumid);
 
   // Perform an uplink
   int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
