@@ -408,7 +408,7 @@ void getChipInfo()
 
     printWakeupReason();
 
-#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(T_BEAM_S3_SUPREME) // added the last one to force PSRAM setting
+#if defined(CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S3)
 
     if (psramFound())
     {

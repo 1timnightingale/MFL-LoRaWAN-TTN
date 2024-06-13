@@ -25,6 +25,8 @@
 #include <RadioLib.h>
 #include "LoRaBoards.h"
 
+// --------------- Supremem 01 -----------------
+/*
 // !!!!! APP EUI
 #define RADIOLIB_LORAWAN_JOIN_EUI 0x0000000000000000
 // !!!!! DEV EUI
@@ -33,6 +35,28 @@
 #define RADIOLIB_LORAWAN_APP_KEY 0xCB, 0x63, 0x69, 0x7F, 0x53, 0xC7, 0x08, 0x26, 0x63, 0x5E, 0xF8, 0x45, 0xEE, 0x67, 0xEB, 0x7F
 // !!! APP KEY
 #define RADIOLIB_LORAWAN_NWK_KEY 0xBE, 0xE2, 0x2B, 0x42, 0x29, 0xDC, 0x23, 0x01, 0xEB, 0xC9, 0x58, 0x45, 0xC6, 0x80, 0xAE, 0xBE
+// !!!!! DEV ADDR
+#define RADIOLIB_LORAWAN_ADDR 0x2608C435
+// !!!!! APP SKey
+#define RADIOLIB_LORAWAN_APPSKEY 0x05, 0x6C, 0x1E, 0x4C, 0x14, 0x50, 0xC7, 0x54, 0xBA, 0xAD, 0xC6, 0xB3, 0xD0, 0xE9, 0xAD, 0x94
+// !!!!! fNwkSIntKey
+#define RADIOLIB_LORAWAN_FNSKEY 0xCF, 0xAD, 0xF1, 0xA5, 0x82, 0x34, 0x17, 0xDA, 0xD3, 0xEA, 0x3F, 0xE4, 0x86, 0x5C, 0xEA, 0x41
+// !!!!! sNwkSIntKey
+#define RADIOLIB_LORAWAN_SNSKEY 0xEE, 0x0B, 0x55, 0xCC, 0x60, 0x50, 0x1F, 0x8C, 0xCD, 0xC9, 0xC5, 0x14, 0x89, 0xA8, 0xFC, 0xCD
+// !!!!! nwkSEncKey
+#define RADIOLIB_LORAWAN_NSKEY 0xE1, 0x04, 0x41, 0x4D, 0x3E, 0xCC, 0x6D, 0x93, 0xD6, 0xFC, 0xAB, 0x39, 0xC1, 0x82, 0xB3, 0x95
+*/
+
+// --------------- Supremem 02 -----------------
+
+// !!!!! APP EUI
+#define RADIOLIB_LORAWAN_JOIN_EUI 0x0000000000000000
+// !!!!! DEV EUI
+#define RADIOLIB_LORAWAN_DEV_EUI 0x70B3D57ED006831D
+// !!!!! APP EUI
+#define RADIOLIB_LORAWAN_APP_KEY 0xD7, 0xD0, 0xC8, 0x37, 0x85, 0x68, 0x55, 0xF6, 0x70, 0x99, 0xAA, 0x3A, 0x16, 0xB9, 0x5A, 0x29
+// !!! APP KEY
+#define RADIOLIB_LORAWAN_NWK_KEY 0x91, 0x92, 0x0D, 0x63, 0x00, 0x07, 0x65, 0x19, 0xD7, 0x71, 0xD1, 0x4B, 0xBA, 0x54, 0x68, 0xF4
 // !!!!! DEV ADDR
 #define RADIOLIB_LORAWAN_ADDR 0x2608C435
 // !!!!! APP SKey
@@ -55,7 +79,7 @@ LR1121 radio = new Module(RADIO_CS_PIN, RADIO_DIO9_PIN, RADIO_RST_PIN, RADIO_BUS
 #endif
 
 // how often to send an uplink - consider legal & FUP constraints - see notes
-const uint32_t uplinkIntervalSeconds = 1UL * 60UL; // minutes x seconds
+const uint32_t uplinkIntervalSeconds = 5UL * 30UL; // minutes x seconds
 
 // for the curious, the #ifndef blocks allow for automated testing &/or you can
 // put your EUI & keys in to your platformio.ini - see wiki for more tips
@@ -106,6 +130,7 @@ unsigned long microsPerReading, microsPrevious;
 // ------------------ Declare PMU Sensor -------------------
 // ---------- Already done in LoRaBoards.cpp
 // -------------------- End of PMU set up ------------------------
+
 // ------------------ Declare GPS Sensor -------------------
 #include "SparkFun_Ublox_Arduino_Library.h"
 
@@ -146,6 +171,14 @@ void arrayDump(uint8_t *buffer, uint16_t len)
   }
   Serial.println();
 }
+// --------------- GPS function added by Tim -------------------
+void SFE_UBLOX_GPS::processNMEA(char incoming)
+{
+  // Take the incoming char from the Ublox I2C port and pass it on to the MicroNMEA lib
+  // for sentence cracking
+  nmea.process(incoming);
+}
+// ---------------------------------------------------------------
 
 static uint32_t txCounter = 0;
 
@@ -460,10 +493,11 @@ void loop()
 
   if (nmea.isValid() == true)
   {
-    uint32_t vLatitude = (nmea.getLatitude()); // already an interger mult by 1000000, still divide in decode
-    uint32_t vLongitude = (nmea.getLongitude());
-    uint8_t vnumSatellites = (nmea.getNumSatellites());
+    vLatitude = (nmea.getLatitude()); // already an interger mult by 1000000, still divide in decode
+    vLongitude = (nmea.getLongitude());
   }
+  vnumSatellites = (nmea.getNumSatellites());
+
   // Print values to serial
   Serial.print("Latitude:");
   Serial.println(vLatitude);
@@ -538,8 +572,16 @@ void loop()
 
   uplinkPayload[43] = vnumSatellites;
 
+  // Set f_port to 1 for later use
+  uint8_t vf_Port = 21;
+
+  // ----------------- Print uploadPayload to serial
+  //  Serial.print("Uplink Payload [43]:");
+  //  Serial.println(uplinkPayload[43]);
+
   // Perform an uplink
-  int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
+  // int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
+  int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload), vf_Port);
   debug((state != RADIOLIB_LORAWAN_NO_DOWNLINK) && (state != RADIOLIB_ERR_NONE), F("Error in sendReceive"), state, false);
 
   if (u8g2)
@@ -565,6 +607,7 @@ void loop()
   Serial.print(F("Uplink complete, next in "));
   Serial.print(uplinkIntervalSeconds);
   Serial.println(F(" seconds"));
+  Serial.println();
 
 #ifdef BOARD_LED
   digitalWrite(BOARD_LED, LED_ON);
