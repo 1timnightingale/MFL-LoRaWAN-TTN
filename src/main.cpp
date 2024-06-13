@@ -456,6 +456,8 @@ void loop()
   uint32_t vLongitude = 0;
   uint8_t vnumSatellites = 0;
 
+  myGPS.checkUblox(); // See if new data is available. Process bytes as they come in.
+
   if (nmea.isValid() == true)
   {
     uint32_t vLatitude = (nmea.getLatitude()); // already an interger mult by 1000000, still divide in decode
