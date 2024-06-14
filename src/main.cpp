@@ -25,8 +25,12 @@
 #include <RadioLib.h>
 #include "LoRaBoards.h"
 
+// #define TTGO_SUPREME_01 ;
+#define TTGO_SUPREME_02 ;
+
+#if defined(TTGO_SUPREME_01)
 // --------------- Supremem 01 -----------------
-/*
+
 // !!!!! APP EUI
 #define RADIOLIB_LORAWAN_JOIN_EUI 0x0000000000000000
 // !!!!! DEV EUI
@@ -45,18 +49,18 @@
 #define RADIOLIB_LORAWAN_SNSKEY 0xEE, 0x0B, 0x55, 0xCC, 0x60, 0x50, 0x1F, 0x8C, 0xCD, 0xC9, 0xC5, 0x14, 0x89, 0xA8, 0xFC, 0xCD
 // !!!!! nwkSEncKey
 #define RADIOLIB_LORAWAN_NSKEY 0xE1, 0x04, 0x41, 0x4D, 0x3E, 0xCC, 0x6D, 0x93, 0xD6, 0xFC, 0xAB, 0x39, 0xC1, 0x82, 0xB3, 0x95
-*/
-
+// --------------------------------------------
+#elif defined(TTGO_SUPREME_02)
 // --------------- Supremem 02 -----------------
-
 // !!!!! APP EUI
 #define RADIOLIB_LORAWAN_JOIN_EUI 0x0000000000000000
 // !!!!! DEV EUI
-#define RADIOLIB_LORAWAN_DEV_EUI 0x70B3D57ED006831D
+#define RADIOLIB_LORAWAN_DEV_EUI 0x70B3D57ED800304F
 // !!!!! APP EUI
-#define RADIOLIB_LORAWAN_APP_KEY 0xD7, 0xD0, 0xC8, 0x37, 0x85, 0x68, 0x55, 0xF6, 0x70, 0x99, 0xAA, 0x3A, 0x16, 0xB9, 0x5A, 0x29
+#define RADIOLIB_LORAWAN_APP_KEY 0x4A, 0x54, 0x85, 0x2C, 0x48, 0x52, 0x53, 0xA4, 0xAA, 0x32, 0xA8, 0x01, 0x7D, 0xFC, 0xF1, 0x2D
 // !!! APP KEY
-#define RADIOLIB_LORAWAN_NWK_KEY 0x91, 0x92, 0x0D, 0x63, 0x00, 0x07, 0x65, 0x19, 0xD7, 0x71, 0xD1, 0x4B, 0xBA, 0x54, 0x68, 0xF4
+#define RADIOLIB_LORAWAN_NWK_KEY 0x4A, 0x54, 0x85, 0x2C, 0x48, 0x52, 0x53, 0xA4, 0xAA, 0x32, 0xA8, 0x01, 0x7D, 0xFC, 0xF1, 0x2D
+
 // !!!!! DEV ADDR
 #define RADIOLIB_LORAWAN_ADDR 0x2608C435
 // !!!!! APP SKey
@@ -67,6 +71,8 @@
 #define RADIOLIB_LORAWAN_SNSKEY 0xEE, 0x0B, 0x55, 0xCC, 0x60, 0x50, 0x1F, 0x8C, 0xCD, 0xC9, 0xC5, 0x14, 0x89, 0xA8, 0xFC, 0xCD
 // !!!!! nwkSEncKey
 #define RADIOLIB_LORAWAN_NSKEY 0xE1, 0x04, 0x41, 0x4D, 0x3E, 0xCC, 0x6D, 0x93, 0xD6, 0xFC, 0xAB, 0x39, 0xC1, 0x82, 0xB3, 0x95
+// ----------------------------------------------
+#endif
 
 #if defined(USING_SX1276)
 SX1276 radio = new Module(RADIO_CS_PIN, RADIO_DIO0_PIN, RADIO_RST_PIN, RADIO_DIO1_PIN);
@@ -95,6 +101,7 @@ uint64_t joinEUI = RADIOLIB_LORAWAN_JOIN_EUI;
 uint64_t devEUI = RADIOLIB_LORAWAN_DEV_EUI;
 uint8_t appKey[] = {RADIOLIB_LORAWAN_APP_KEY};
 uint8_t nwkKey[] = {RADIOLIB_LORAWAN_NWK_KEY};
+
 uint32_t addr = RADIOLIB_LORAWAN_ADDR;
 uint8_t fNwkSIntKey[] = {RADIOLIB_LORAWAN_FNSKEY};
 uint8_t sNwkSIntKey[] = {RADIOLIB_LORAWAN_SNSKEY};
@@ -362,7 +369,7 @@ void setup()
   qmi.enableAccelerometer();
 
   // Print register configuration information
-  Serial.print("dumping register config");
+  Serial.println("dumping register config");
   qmi.dumpCtrlRegister();
   qmi.enableSyncSampleMode();
 
@@ -395,14 +402,10 @@ void setup()
 
 void loop()
 {
-  Serial.println(F("Sending uplink"));
+  Serial.println(F("Preparing uplink data"));
 
   // This is the place to gather the sensor inputs
   // Instead of reading any real sensor, we just generate some random numbers as example
-  // uint8_t value1 = radio.random(100);
-  // uint16_t value2 = radio.random(2000);
-  // uint8_t value1 = 100;
-  // uint16_t value2 = 2000;
 
   // ------------------- Get BME280 sensor data ---------------------
   int32_t vTemp = (bme.readTemperature() * 10000);
@@ -459,10 +462,10 @@ void loop()
   uint8_t vPmu_charging = (PMU->isCharging() ? 1 : 0);
   uint8_t vPmu_discharge = (PMU->isDischarge() ? 1 : 0);
   uint8_t vPmu_vbusIn = (PMU->isVbusIn() ? 1 : 0);
-  uint16_t vPmu_battV = (PMU->getBattVoltage() * 1000);
-  uint16_t vPmu_vbusV = (PMU->getVbusVoltage() * 1000);
-  uint16_t vPmu_SysV = (PMU->getSystemVoltage() * 1000);
-  uint16_t vPmu_battperc = (PMU->getBatteryPercent() * 1000);
+  uint32_t vPmu_battV = (PMU->getBattVoltage());
+  uint32_t vPmu_vbusV = (PMU->getVbusVoltage());
+  uint32_t vPmu_SysV = (PMU->getSystemVoltage());
+  uint32_t vPmu_battperc = (PMU->getBatteryPercent() * 10000);
 
   // Print values to serial
   Serial.print("Charging:");
@@ -507,9 +510,10 @@ void loop()
   Serial.println(vnumSatellites);
 
   // ------------------- End of GPS sensor ----------------------
+  Serial.println(F("Building bytye array"));
 
   // Build payload byte array
-  uint8_t uplinkPayload[44];
+  uint8_t uplinkPayload[52];
   // Add environmental data
   uplinkPayload[0] = (byte)((vTemp & 0xFF000000) >> 24); // See notes for high/lowByte functions
   uplinkPayload[1] = (byte)((vTemp & 0x00FF0000) >> 16); // See notes for high/lowByte functions
@@ -547,37 +551,43 @@ void loop()
   uplinkPayload[25] = vPmu_discharge;
   uplinkPayload[26] = vPmu_vbusIn;
 
-  uplinkPayload[27] = (byte)((vPmu_battV & 0x0000FF00) >> 8); // See notes for high/lowByte functions
-  uplinkPayload[28] = (byte)((vPmu_battV & 0x000000FF));      // See notes for high/lowByte functions
+  uplinkPayload[27] = (byte)((vPmu_battV & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[28] = (byte)((vPmu_battV & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[29] = (byte)((vPmu_battV & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[30] = (byte)((vPmu_battV & 0x000000FF));       // See notes for high/lowByte functions
 
-  uplinkPayload[29] = (byte)((vPmu_vbusV & 0x0000FF00) >> 8); // See notes for high/lowByte functions
-  uplinkPayload[30] = (byte)((vPmu_vbusV & 0x000000FF));      // See notes for high/lowByte functions
+  uplinkPayload[31] = (byte)((vPmu_vbusV & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[32] = (byte)((vPmu_vbusV & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[33] = (byte)((vPmu_vbusV & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[34] = (byte)((vPmu_vbusV & 0x000000FF));       // See notes for high/lowByte functions
 
-  uplinkPayload[31] = (byte)((vPmu_SysV & 0x0000FF00) >> 8); // See notes for high/lowByte functions
-  uplinkPayload[32] = (byte)((vPmu_SysV & 0x000000FF));      // See notes for high/lowByte functions
+  uplinkPayload[35] = (byte)((vPmu_SysV & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[36] = (byte)((vPmu_SysV & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[37] = (byte)((vPmu_SysV & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[38] = (byte)((vPmu_SysV & 0x000000FF));       // See notes for high/lowByte functions
 
-  uplinkPayload[33] = (byte)((vPmu_battperc & 0x0000FF00) >> 8); // See notes for high/lowByte functions
-  uplinkPayload[34] = (byte)((vPmu_battperc & 0x000000FF));      // See notes for high/lowByte functions
+  uplinkPayload[39] = (byte)((vPmu_battperc & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[40] = (byte)((vPmu_battperc & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[41] = (byte)((vPmu_battperc & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[42] = (byte)((vPmu_battperc & 0x000000FF));       // See notes for high/lowByte functions
 
   // Add positioning data
-  uplinkPayload[35] = (byte)((vLatitude & 0xFF000000) >> 24); // See notes for high/lowByte functions
-  uplinkPayload[36] = (byte)((vLatitude & 0x00FF0000) >> 16); // See notes for high/lowByte functions
-  uplinkPayload[37] = (byte)((vLatitude & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
-  uplinkPayload[38] = (byte)((vLatitude & 0x000000FF));       // See notes for high/lowByte functions
+  uplinkPayload[43] = (byte)((vLatitude & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[44] = (byte)((vLatitude & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[45] = (byte)((vLatitude & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[46] = (byte)((vLatitude & 0x000000FF));       // See notes for high/lowByte functions
 
-  uplinkPayload[39] = (byte)((vLongitude & 0xFF000000) >> 24); // See notes for high/lowByte functions
-  uplinkPayload[40] = (byte)((vLongitude & 0x00FF0000) >> 16); // See notes for high/lowByte functions
-  uplinkPayload[41] = (byte)((vLongitude & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
-  uplinkPayload[42] = (byte)((vLongitude & 0x000000FF));       // See notes for high/lowByte functions
+  uplinkPayload[47] = (byte)((vLongitude & 0xFF000000) >> 24); // See notes for high/lowByte functions
+  uplinkPayload[48] = (byte)((vLongitude & 0x00FF0000) >> 16); // See notes for high/lowByte functions
+  uplinkPayload[49] = (byte)((vLongitude & 0x0000FF00) >> 8);  // See notes for high/lowByte functions
+  uplinkPayload[50] = (byte)((vLongitude & 0x000000FF));       // See notes for high/lowByte functions
 
-  uplinkPayload[43] = vnumSatellites;
+  uplinkPayload[51] = vnumSatellites;
 
-  // Set f_port to 1 for later use
+  // Set f_port to 21 for later use
   uint8_t vf_Port = 21;
 
-  // ----------------- Print uploadPayload to serial
-  //  Serial.print("Uplink Payload [43]:");
-  //  Serial.println(uplinkPayload[43]);
+  Serial.println(F("Sending uplink"));
 
   // Perform an uplink
   // int state = node.sendReceive(uplinkPayload, sizeof(uplinkPayload));
